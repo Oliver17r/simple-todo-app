@@ -6,17 +6,19 @@ function App() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [dueDateValue, setDueDateValue] = useState('');
-  // 表示するステータスを選ぶための変数（all = 全て表示）
   const [filter, setFilter] = useState('all');
+  // 並び順を管理する変数（created = 作成順, dueDate = 期限順）
+  const [sortType, setSortType] = useState('created');
 
   const handleAddTodo = () => {
     if (inputValue.trim() === '') return;
     
     const newTodo: Todo = {
+      // idは現在時刻(ミリ秒)なので、そのまま作成日時として扱えます
       id: Date.now().toString(),
       title: inputValue,
       dueDate: dueDateValue,
-      status: 'todo', // 最初は必ず「未着手(todo)」からスタート
+      status: 'todo',
     };
     setTodos([...todos, newTodo]);
     setInputValue('');
@@ -27,18 +29,11 @@ function App() {
     setTodos(todos.filter(todo => todo.id !== id));
   };
 
-  // ステータスを変更する関数
   const handleStatusChange = (id: string, newStatus: 'todo' | 'doing' | 'done') => {
     setTodos(todos.map(todo => 
       todo.id === id ? { ...todo, status: newStatus } : todo
     ));
   };
-
-  // フィルタリングされたToDoリストを作成
-  const filteredTodos = todos.filter(todo => {
-    if (filter === 'all') return true;
-    return todo.status === filter;
-  });
 
   const isOverdue = (dueDate: string) => {
     if (!dueDate) return false;
@@ -46,9 +41,32 @@ function App() {
     return dueDate < today;
   };
 
+  // フィルタリング処理（お題2の機能）
+  const filteredTodos = todos.filter(todo => {
+    if (filter === 'all') return true;
+    return todo.status === filter;
+  });
+
+  // 並び替え処理
+  const sortedTodos = [...filteredTodos].sort((a, b) => {
+    if (sortType === 'dueDate') {
+      // 期限日順：期限がないものは後ろへ
+      const dateA = a.dueDate || '9999-99-99';
+      const dateB = b.dueDate || '9999-99-99';
+      return dateA.localeCompare(dateB);
+    }
+    if (sortType === 'status') {
+      // ステータス順：未着手 -> 進行中 -> 完了
+      const order = { todo: 1, doing: 2, done: 3 };
+      return order[a.status] - order[b.status];
+    }
+    // デフォルト（created）：作成日時が新しい順（IDが大きい順）
+    return b.id.localeCompare(a.id);
+  });
+
   return (
     <div className="app">
-      <h1>Todo App (ステータス管理)</h1>
+      <h1>Todo App (完成版)</h1>
       
       {/* 入力エリア */}
       <div className="input-section">
@@ -67,29 +85,40 @@ function App() {
         <button onClick={handleAddTodo}>追加</button>
       </div>
 
-      {/* ★追加: 表示切り替えボタン */}
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
-        <label>表示切替: </label>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ padding: '4px' }}>
-          <option value="all">すべて</option>
-          <option value="todo">未着手</option>
-          <option value="doing">進行中</option>
-          <option value="done">完了</option>
-        </select>
+      {/* フィルタと並び替えのコントロールエリア */}
+      <div style={{ marginBottom: '20px', display: 'flex', gap: '20px', alignItems: 'center', background: '#eee', padding: '10px', borderRadius: '4px' }}>
+        <div>
+          <label style={{ fontWeight: 'bold' }}>絞り込み: </label>
+          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option value="all">すべて</option>
+            <option value="todo">未着手</option>
+            <option value="doing">進行中</option>
+            <option value="done">完了</option>
+          </select>
+        </div>
+        
+        {/* 並び替えプルダウン */}
+        <div>
+          <label style={{ fontWeight: 'bold' }}>並び順: </label>
+          <select value={sortType} onChange={(e) => setSortType(e.target.value)}>
+            <option value="created">作成日順 (新着)</option>
+            <option value="dueDate">期限日が近い順</option>
+            <option value="status">ステータス順</option>
+          </select>
+        </div>
       </div>
 
-      {/* ToDoリスト表示 */}
+      {/* ToDoリスト表示（sortedTodosを使う） */}
       <ul className="todo-list">
-        {filteredTodos.map((todo) => {
+        {sortedTodos.map((todo) => {
           const overdue = isOverdue(todo.dueDate);
           return (
             <li key={todo.id} className="todo-item" style={{
               backgroundColor: overdue ? '#ffe6e6' : '#f8f9fa',
-              borderLeft: todo.status === 'done' ? '5px solid #28a745' : '5px solid #ccc' // 完了なら左に緑の線
+              borderLeft: todo.status === 'done' ? '5px solid #28a745' : '5px solid #ccc'
             }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {/* ★追加: 各タスクのステータス変更プルダウン */}
                   <select 
                     value={todo.status} 
                     onChange={(e) => handleStatusChange(todo.id, e.target.value as any)}
@@ -102,17 +131,17 @@ function App() {
                   
                   <span style={{ 
                     textDecoration: todo.status === 'done' ? 'line-through' : 'none',
-                    color: overdue ? 'red' : 'inherit'
+                    color: overdue ? 'red' : 'inherit',
+                    fontWeight: 'bold'
                   }}>
                     {todo.title}
                   </span>
                 </div>
                 
-                {todo.dueDate && (
-                  <div style={{ fontSize: '0.85em', color: overdue ? '#d32f2f' : '#666', marginLeft: '90px' }}>
-                    期限: {todo.dueDate} {overdue ? '(期限切れ)' : ''}
-                  </div>
-                )}
+                <div style={{ fontSize: '0.85em', color: '#666', marginLeft: '90px', marginTop: '4px' }}>
+                   {todo.dueDate ? `期限: ${todo.dueDate}` : '期限なし'}
+                   {overdue && <span style={{ color: 'red', fontWeight: 'bold' }}> (期限切れ)</span>}
+                </div>
               </div>
               <button onClick={() => handleDeleteTodo(todo.id)}>削除</button>
             </li>
